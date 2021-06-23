@@ -4,3 +4,4 @@ restart.bat
 *.bat
 .idea
 .env
+*.log
