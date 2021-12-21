@@ -5,15 +5,35 @@ describe("server", () => {
 
 	beforeAll((done) => {
 		client = io(`http://localhost:4288`);
-		client.on("connect", done);
 	});
 
 	afterAll(() => {
+		if (client.connected) {
+			client.disconnect();
+		}
 		client.close();
 	});
 
-	test("can connect", (done) => {
-		expect(client.connected).toBe(true);
-		done();
+	test("can connect and recieve banner", (done) => {
+		expect.assertions(4);
+
+		expect(client.connected).toBe(false);
+
+		client.once("ServerMessage", (msg) => {
+			expect(msg).toBe('Connected to the Bondage Club Server.');
+			client.once("ServerMessage", (msg) => {
+				expect(msg).toBe('Warning!  Console scripts can break your account or steal your data.');
+				done();
+			});
+		});
+
+		client.on("connect", () => {
+			try {
+				expect(client.connected).toBe(true);
+			} catch (error) {
+				done(error);
+			}
+		});
 	});
+
 });
