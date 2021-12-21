@@ -3,7 +3,7 @@ import { io, Socket } from "socket.io-client";
 describe("server", () => {
 	let client: Socket;
 
-	beforeAll((done) => {
+	beforeAll(() => {
 		client = io(`http://localhost:4288`);
 	});
 
@@ -19,12 +19,10 @@ describe("server", () => {
 
 		expect(client.connected).toBe(false);
 
-		client.once("ServerMessage", (msg) => {
-			expect(msg).toBe('Connected to the Bondage Club Server.');
-			client.once("ServerMessage", (msg) => {
-				expect(msg).toBe('Warning!  Console scripts can break your account or steal your data.');
-				done();
-			});
+		client.once("ServerInfo", (msg: ServerInfoMessage) => {
+			expect(msg.OnlinePlayers).toBeGreaterThanOrEqual(0);
+			expect(msg.Time).toBeGreaterThanOrEqual(0);
+			done();
 		});
 
 		client.on("connect", () => {

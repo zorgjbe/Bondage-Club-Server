@@ -1,8 +1,26 @@
 import { io, Socket } from "socket.io-client";
+import { Db, MongoClient } from "mongodb";
+import { DATABASE_NAME, DATABASE_URL } from "./config";
 
 describe("server", () => {
-	let client: Socket;
 
+	/** Database connection */
+	let mongodb: MongoClient;
+	let database: Db
+	beforeAll(async () => {
+		mongodb = await MongoClient.connect(DATABASE_URL, {
+			useUnifiedTopology: true,
+			useNewUrlParser: true,
+		});
+		database = await mongodb.db(DATABASE_NAME);
+	});
+
+	afterAll(async () => {
+		await mongodb.close();
+	});
+
+	/** API client */
+	let client: Socket;
 	beforeEach((done) => {
 		client = io(`http://localhost:4288`);
 		client.on("connect", () => {
@@ -16,6 +34,16 @@ describe("server", () => {
 			client.disconnect();
 		}
 		client.close();
+	});
+
+	// Test user cleanup
+	beforeEach(() => {
+		const accounts = database.collection('Accounts');
+		accounts.deleteMany({ AccountName: "TESTACCOUNT" });
+	});
+	afterEach(() => {
+		const accounts = database.collection('Accounts');
+		accounts.deleteMany({ AccountName: "TESTACCOUNT" });
 	});
 
 	test("can create accounts", (done) => {
