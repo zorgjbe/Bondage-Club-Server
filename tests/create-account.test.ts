@@ -1,6 +1,5 @@
 import { io, Socket } from "socket.io-client";
 import { Db, MongoClient } from "mongodb";
-import { DATABASE_NAME, DATABASE_URL } from "./config";
 
 describe("server", () => {
 
@@ -8,11 +7,11 @@ describe("server", () => {
 	let mongodb: MongoClient;
 	let database: Db
 	beforeAll(async () => {
-		mongodb = await MongoClient.connect(DATABASE_URL, {
+		mongodb = await MongoClient.connect(process.env.TEST_DATABASE_URL as string, {
 			useUnifiedTopology: true,
 			useNewUrlParser: true,
 		});
-		database = await mongodb.db(DATABASE_NAME);
+		database = await mongodb.db(process.env.DATABASE_NAME);
 	});
 
 	afterAll(async () => {

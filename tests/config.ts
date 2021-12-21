@@ -1,2 +1,6 @@
-export const DATABASE_URL = "mongodb://admin:password@localhost:27017/";
-export const DATABASE_NAME = 'BondageClubDatabase';
+import * as dotenv from "dotenv";
+import * as dotenvExpand from "dotenv-expand";
+
+// Load .env file
+let env = dotenv.config()
+dotenvExpand.default(env)
