@@ -30,6 +30,7 @@
 		"sync-request": "^6.1.0"
 	},
 	"devDependencies": {
+		"@types/bcrypt": "^5.0.0",
 		"@types/jest": "^29.2.5",
 		"@types/mongodb": "^3.4.1",
 		"dotenv": "^10.0.0",
