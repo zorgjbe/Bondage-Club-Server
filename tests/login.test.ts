@@ -1,4 +1,5 @@
 import { io, Socket } from "socket.io-client";
+import { Club } from "./client";
 import { DbClient } from "./db";
 
 describe("client", () => {
@@ -56,26 +57,26 @@ describe("client", () => {
 		test("can login", (done) => {
 			expect.assertions(2);
 
-			client.on("LoginResponse", (arg) => {
-				expect(arg).toMatchObject({
-					AccountName: accountData.AccountName,
-					Name: accountData.Name,
-					Money: expect.any(Number),
-					Creation: expect.any(Number),
-					LastLogin: expect.any(Number),
-					Lovership: expect.any(Array),
-					MemberNumber: expect.any(Number),
-					ID: expect.any(String),
-					Environment: expect.any(String),
-					ItemPermission: expect.any(Number),
-					WhiteList: expect.any(Array),
-					BlackList: expect.any(Array),
-					FriendList: expect.any(Array),
+			Club.loginAccount(client, accountData.AccountName, accountData.Password)
+				.catch((err) => { done(err) })
+				.then((account) => {
+					expect(account).toMatchObject({
+						AccountName: accountData.AccountName,
+						Name: accountData.Name,
+						Money: expect.any(Number),
+						Creation: expect.any(Number),
+						LastLogin: expect.any(Number),
+						Lovership: expect.any(Array),
+						MemberNumber: expect.any(Number),
+						ID: expect.any(String),
+						Environment: expect.any(String),
+						ItemPermission: expect.any(Number),
+						WhiteList: expect.any(Array),
+						BlackList: expect.any(Array),
+						FriendList: expect.any(Array),
+					});
+					done();
 				});
-				done();
-			});
-
-			client.emit("AccountLogin", { AccountName: accountData.AccountName, Password: accountData.Password });
 		});
 	});
 
@@ -95,12 +96,12 @@ describe("client", () => {
 		test("can't login with an incorrect password", (done) => {
 			expect.assertions(2);
 
-			client.on("LoginResponse", (arg) => {
-				expect(arg).toBe("InvalidNamePassword");
-				done();
-			});
-
-			client.emit("AccountLogin", { AccountName: accountData.AccountName, Password: "not the correct password" });
+			Club.loginAccount(client, accountData.AccountName, "not the correct password")
+				.catch((err) => { done(err) })
+				.then((account) => {
+					expect(account).toBe("InvalidNamePassword");
+					done();
+				});
 		});
 	});
 
