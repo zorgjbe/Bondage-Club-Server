@@ -1,6 +1,7 @@
 import { MongoClient } from "mongodb";
 import { io, Socket } from "socket.io-client";
 import { DbClient } from "./db";
+import { generateAccount } from "./fake";
 
 describe("server", () => {
 
@@ -32,8 +33,10 @@ describe("server", () => {
 	});
 
 	// Test user cleanup
+	let testAccount: ServerAccount;
 	beforeEach(() => {
 		const accounts = DB.database.collection('Accounts');
+		testAccount = generateAccount();
 		accounts.deleteMany({ AccountName: "TESTACCOUNT" });
 	});
 	afterEach(() => {
@@ -42,12 +45,6 @@ describe("server", () => {
 	});
 
 	test("can create accounts", (done) => {
-		const accountData = {
-			Name: "Test",
-			AccountName: "TESTACCOUNT",
-			Password: "thisisabadpassword",
-			Email: "example@example.org"
-		};
 		expect.assertions(2);
 
 		client.on("CreationResponse", (arg) => {
@@ -59,18 +56,13 @@ describe("server", () => {
 			done();
 		});
 
-		client.emit("AccountCreate", accountData);
+		client.emit("AccountCreate", testAccount);
 	});
 
 	// FIXME: This one actually causes a null-response from server
 	xtest("can create accounts without an email", (done) => {
-		const accountData = {
-			Name: "Test",
-			AccountName: "TESTACCOUNT",
-			Password: "thisisabadpassword",
-			Email: "",
-		};
 		expect.assertions(2);
+		testAccount.Email = "";
 
 		client.on("CreationResponse", (arg) => {
 			expect(arg).toMatchObject({
@@ -81,7 +73,7 @@ describe("server", () => {
 			done();
 		});
 
-		client.emit("AccountCreate", accountData);
+		client.emit("AccountCreate", testAccount);
 	});
 
 	test("fails to create account with no data", (done) => {

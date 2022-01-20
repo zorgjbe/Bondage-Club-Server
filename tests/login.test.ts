@@ -1,6 +1,7 @@
 import { io, Socket } from "socket.io-client";
 import { Club } from "./client";
 import { DbClient } from "./db";
+import { generateAccount } from "./fake";
 
 describe("client", () => {
 
@@ -32,37 +33,32 @@ describe("client", () => {
 	});
 
 	// Test user cleanup
+	let testAccount: ServerAccount;
 	beforeEach(() => {
 		const accounts = DB.database.collection('Accounts');
-		accounts.deleteMany({ AccountName: "TESTACCOUNT" });
+		testAccount = generateAccount();
+		accounts.deleteMany({ AccountName: testAccount.AccountName });
 	});
 	afterEach(() => {
 		const accounts = DB.database.collection('Accounts');
-		accounts.deleteMany({ AccountName: "TESTACCOUNT" });
+		accounts.deleteMany({ AccountName: testAccount.AccountName });
 	});
 
 	describe('with a valid account', () => {
 
-		const accountData = {
-			Name: "Test",
-			AccountName: "TESTACCOUNT",
-			Password: "thisisabadpassword",
-			Email: "example@example.org"
-		};
-
 		beforeEach(async () => {
-			await DB.createAccount(accountData.AccountName, accountData.Password, accountData.Name, accountData.Email);
+			await DB.createAccount(testAccount.AccountName, testAccount.Password, testAccount.Name, testAccount.Email);
 		});
 
 		test("can login", (done) => {
 			expect.assertions(2);
 
-			Club.loginAccount(client, accountData.AccountName, accountData.Password)
+			Club.loginAccount(client, testAccount.AccountName, testAccount.Password)
 				.catch((err) => { done(err) })
 				.then((account) => {
 					expect(account).toMatchObject({
-						AccountName: accountData.AccountName,
-						Name: accountData.Name,
+						AccountName: testAccount.AccountName,
+						Name: testAccount.Name,
 						Money: expect.any(Number),
 						Creation: expect.any(Number),
 						LastLogin: expect.any(Number),
@@ -82,21 +78,14 @@ describe("client", () => {
 
 	describe('with an valid account', () => {
 
-		const accountData = {
-			Name: "Test",
-			AccountName: "TESTACCOUNT",
-			Password: "thisisabadpassword",
-			Email: "example@example.org"
-		};
-
 		beforeEach(async () => {
-			await DB.createAccount(accountData.AccountName, accountData.Password, accountData.Name, accountData.Email);
+			await DB.createAccount(testAccount.AccountName, testAccount.Password, testAccount.Name, testAccount.Email);
 		});
 
 		test("can't login with an incorrect password", (done) => {
 			expect.assertions(2);
 
-			Club.loginAccount(client, accountData.AccountName, "not the correct password")
+			Club.loginAccount(client, testAccount.AccountName, "not the correct password")
 				.catch((err) => { done(err) })
 				.then((account) => {
 					expect(account).toBe("InvalidNamePassword");

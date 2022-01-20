@@ -1,6 +1,7 @@
 import { io, Socket } from "socket.io-client";
 import { Club } from "./client";
 import { DbClient } from "./db";
+import { generateAccount } from "./fake";
 
 describe("client", () => {
 
@@ -30,16 +31,11 @@ describe("client", () => {
 		client.close();
 	});
 
-	const testAccount = {
-		Name: "Test",
-		AccountName: "TESTACCOUNT",
-		Password: "thisisabadpassword",
-		Email: "example@example.org"
-	};
-
 	// Test user cleanup
+	let testAccount: ServerAccount;
 	beforeEach(async () => {
 		const accounts = DB.database.collection('Accounts');
+		testAccount = generateAccount();
 		await accounts.deleteMany({ AccountName: testAccount.AccountName });
 	});
 	afterEach(async () => {
@@ -57,7 +53,6 @@ describe("client", () => {
 			expect.assertions(2);
 
 			client.on('AccountQueryResult', (reply) => {
-				console.log(reply);
 				expect(reply).toMatchObject({
 					Query: 'OnlineFriends',
 					Result: [],
@@ -85,7 +80,8 @@ describe("client", () => {
 
 	describe('given a valid account with no email', () => {
 		beforeEach(async () => {
-			await DB.createAccount(testAccount.AccountName, testAccount.Password, testAccount.Name, '');
+			testAccount.Email = "";
+			await DB.createAccount(testAccount.AccountName, testAccount.Password, testAccount.Name, testAccount.Email);
 			await Club.loginAccount(client, testAccount.AccountName, testAccount.Password);
 		});
 

@@ -1,6 +1,7 @@
 import { io, Socket } from "socket.io-client";
 import { Club } from "./client";
 import { DbClient } from "./db";
+import { generateAccount } from "./fake";
 
 describe("server", () => {
 
@@ -30,15 +31,11 @@ describe("server", () => {
 		client.close();
 	});
 
-	const testAccount = {
-		Name: "Test",
-		AccountName: "TESTACCOUNT",
-		Password: "thisisabadpassword",
-		Email: "example@example.org"
-	};
 	// Test user cleanup
+	let testAccount: ServerAccount;
 	beforeEach(() => {
 		const accounts = DB.database.collection('Accounts');
+		testAccount = generateAccount();
 		accounts.deleteMany({ AccountName: testAccount.AccountName });
 	});
 	afterEach(() => {

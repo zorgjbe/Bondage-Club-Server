@@ -1,8 +1,8 @@
 import { io, Socket } from "socket.io-client";
 import { Club } from "./client";
 import { DbClient } from "./db";
+import { generateAccount } from "./fake";
 import { sleep } from "./helpers";
-
 
 describe("client", () => {
 
@@ -33,16 +33,11 @@ describe("client", () => {
 		client.close();
 	});
 
-	const testAccount = {
-		Name: "Test",
-		AccountName: "TESTACCOUNT",
-		Password: "thisisabadpassword",
-		Email: "example@example.org"
-	};
-
 	// Test user cleanup
+	let testAccount: ServerAccount;
 	beforeEach(async () => {
 		const accounts = DB.database.collection('Accounts');
+		testAccount = generateAccount();
 		await accounts.deleteMany({ AccountName: testAccount.AccountName });
 	});
 	afterEach(async () => {
@@ -92,10 +87,10 @@ describe("client", () => {
 
 		/* FIXME: Some of these would require a peek at the account after login */
 		test.each([
-			["Name", testAccount.Name, "Invalid"],
-			["AccountName", testAccount.AccountName, "Invalid"],
+			["Name", () => testAccount.Name, "Invalid"],
+			["AccountName", () => testAccount.AccountName, "Invalid"],
 			// ["Password", undefined, undefined],
-			["Email", testAccount.Email, "Invalid"],
+			["Email", () => testAccount.Email, "Invalid"],
 			// ["Creation", undefined, undefined],
 			// ["LastLogin", undefined, undefined],
 			["Pose", undefined, "Invalid"],
@@ -108,9 +103,12 @@ describe("client", () => {
 			["Lovership", [], "Invalid"],
 			["Difficulty", undefined, 3],
 		])('can\'t update %s', async (key, before, after) => {
+			const dynamicBefore = typeof before === "function" ? before() : before;
 			const data = {}
 			// @ts-ignore
 			data[key] = after;
+
+
 			await client.emit('AccountUpdate', data);
 
 			/* FIXME: server reply seems to happen before the update is made to the DB */
@@ -118,7 +116,7 @@ describe("client", () => {
 
 			const account = await DB.database.collection('Accounts').findOne({ AccountName: testAccount.AccountName });
 			expect(account[key]).not.toStrictEqual(after);
-			expect(account[key]).toStrictEqual(before);
+			expect(account[key]).toStrictEqual(dynamicBefore);
 		});
 
 		describe('can update its email', () => {
