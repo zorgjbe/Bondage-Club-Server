@@ -65,5 +65,45 @@ describe("server", () => {
 
 			client.emit("ChatRoomCreate", chatroomData);
 		});
+
+		it("errors if name is too long", (done) => {
+			expect.assertions(2);
+
+			const chatroomData = {
+				Name: "A pretty nice chatroom it is",
+				Description: "",
+				Background: "",
+				Private: false,
+			}
+
+			expect(client.connected).toBe(true);
+
+			client.on("ChatRoomCreateResponse", (reply) => {
+				expect(reply).toBe("InvalidRoomData");
+				done();
+			});
+
+			client.emit("ChatRoomCreate", chatroomData);
+		});
+
+		it("errors if background is too long", (done) => {
+			expect.assertions(2);
+
+			const chatroomData = {
+				Name: "A chatroom",
+				Description: "",
+				Background: "a".repeat(101),
+				Private: false,
+			}
+
+			expect(client.connected).toBe(true);
+
+			client.on("ChatRoomCreateResponse", (reply) => {
+				expect(reply).toBe("InvalidRoomData");
+				done();
+			});
+
+			client.emit("ChatRoomCreate", chatroomData);
+		});
 	});
 });
