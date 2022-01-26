@@ -17,13 +17,8 @@ describe("client", () => {
 	});
 
 	let client: Socket;
-
-	beforeEach((done) => {
-		client = io(`http://localhost:4288`);
-		client.on("connect", () => {
-			expect(client.connected).toBe(true);
-			done();
-		});
+	beforeEach(async () => {
+		client = await Club.createClient();
 	});
 
 	afterEach(() => {
@@ -69,6 +64,8 @@ describe("client", () => {
 			["FriendList", undefined, [1]],
 			["Title", undefined, "New"],
 		])('can update %s', async (key, before, after) => {
+			expect(client.connected).toBe(true);
+
 			const data = {}
 			// @ts-ignore
 			data[key] = after;
@@ -103,11 +100,12 @@ describe("client", () => {
 			["Lovership", [], "Invalid"],
 			["Difficulty", undefined, 3],
 		])('can\'t update %s', async (key, before, after) => {
+			expect(client.connected).toBe(true);
+
 			const dynamicBefore = typeof before === "function" ? before() : before;
 			const data = {}
 			// @ts-ignore
 			data[key] = after;
-
 
 			await client.emit('AccountUpdate', data);
 
@@ -125,6 +123,8 @@ describe("client", () => {
 				let duplicateReply = 0;
 
 				expect.assertions(4);
+
+				expect(client.connected).toBe(true);
 
 				client.on('AccountQueryResult', async (result) => {
 					duplicateReply++;
@@ -160,6 +160,8 @@ describe("client", () => {
 				const data = { EmailOld: 'random@example.com', EmailNew: "new@example.com" };
 
 				expect.assertions(3);
+
+				expect(client.connected).toBe(true);
 
 				client.on('AccountQueryResult', async (result) => {
 					expect(result).toMatchObject({

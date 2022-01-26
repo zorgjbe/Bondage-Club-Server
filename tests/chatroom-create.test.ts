@@ -1,4 +1,4 @@
-import { io, Socket } from "socket.io-client";
+import { Socket } from "socket.io-client";
 import { Club } from "./client";
 import { DbClient } from "./db";
 import { generateAccount } from "./fake";
@@ -17,11 +17,8 @@ describe("server", () => {
 
 	// API client
 	let client: Socket;
-	beforeEach((done) => {
-		client = io(`http://localhost:4288`);
-		client.on("connect", () => {
-			done();
-		});
+	beforeEach(async () => {
+		client = await Club.createClient();
 	});
 
 	afterEach(() => {

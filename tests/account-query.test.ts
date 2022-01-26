@@ -1,4 +1,4 @@
-import { io, Socket } from "socket.io-client";
+import { Socket } from "socket.io-client";
 import { Club } from "./client";
 import { DbClient } from "./db";
 import { generateAccount } from "./fake";
@@ -16,12 +16,8 @@ describe("client", () => {
 	});
 
 	let client: Socket;
-	beforeEach((done) => {
-		client = io(`http://localhost:4288`);
-		client.on("connect", () => {
-			expect(client.connected).toBe(true);
-			done();
-		});
+	beforeEach(async () => {
+		client = await Club.createClient();
 	});
 
 	afterEach(() => {
@@ -52,6 +48,8 @@ describe("client", () => {
 		test('can query online friends', (done) => {
 			expect.assertions(2);
 
+			expect(client.connected).toBe(true);
+
 			client.on('AccountQueryResult', (reply) => {
 				expect(reply).toMatchObject({
 					Query: 'OnlineFriends',
@@ -65,6 +63,8 @@ describe("client", () => {
 
 		test('can query email linking status', (done) => {
 			expect.assertions(2);
+
+			expect(client.connected).toBe(true);
 
 			client.on('AccountQueryResult', (reply) => {
 				expect(reply).toMatchObject({
@@ -87,6 +87,8 @@ describe("client", () => {
 
 		test('can query email linking status', (done) => {
 			expect.assertions(2);
+
+			expect(client.connected).toBe(true);
 
 			client.on('AccountQueryResult', (reply) => {
 				expect(reply).toMatchObject({

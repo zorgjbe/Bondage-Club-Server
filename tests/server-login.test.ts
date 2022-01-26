@@ -1,4 +1,4 @@
-import { io, Socket } from "socket.io-client";
+import { Socket } from "socket.io-client";
 import { Club } from "./client";
 import { DbClient } from "./db";
 import { generateAccount } from "./fake";
@@ -16,13 +16,8 @@ describe("client", () => {
 	});
 
 	let client: Socket;
-
-	beforeEach((done) => {
-		client = io(`http://localhost:4288`);
-		client.on("connect", () => {
-			expect(client.connected).toBe(true);
-			done();
-		});
+	beforeEach(async () => {
+		client = await Club.createClient()
 	});
 
 	afterEach(() => {
@@ -30,6 +25,8 @@ describe("client", () => {
 			client.disconnect();
 		}
 		client.close();
+		// @ts-ignore
+		client = null;
 	});
 
 	// Test user cleanup
@@ -52,6 +49,8 @@ describe("client", () => {
 
 		test("can login", (done) => {
 			expect.assertions(2);
+
+			expect(client.connected).toBe(true);
 
 			Club.loginAccount(client, testAccount.AccountName, testAccount.Password)
 				.catch((err) => { done(err) })
@@ -84,6 +83,8 @@ describe("client", () => {
 
 		test("can't login with an incorrect password", (done) => {
 			expect.assertions(2);
+
+			expect(client.connected).toBe(true);
 
 			Club.loginAccount(client, testAccount.AccountName, "not the correct password")
 				.catch((err) => { done(err) })
