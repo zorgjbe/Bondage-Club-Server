@@ -7,3 +7,10 @@ interface ServerInfoMessage {
 }
 
 type ServerAccountUpdateMessage = Partial<Account>;
+
+interface ServerChatRoomCreateData {
+    Name: string;
+    Description: string;
+    Background: string;
+    Private: boolean;
+}

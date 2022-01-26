@@ -36,4 +36,23 @@ export class Club {
 			client.emit("AccountLogin", { AccountName: accountname, Password: password });
 		}));
 	}
+
+	/**
+	 * Create a chatroom.
+	 */
+	static createChatroom(client: Socket, chatroom: ServerChatRoomCreateData): Promise<void> {
+		return withTimeout(TIMEOUT, new Promise((resolve, reject) => {
+			client.once("ChatRoomCreateResponse", (reply) => {
+				if (reply === "ChatRoomCreated") {
+					resolve(null);
+				} else {
+					reject(new Error(`Failed to create chatroom: ${reply}`));
+				}
+			});
+
+			client.emit("ChatRoomCreate", chatroom);
+		}));
+
+	}
+
 }

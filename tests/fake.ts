@@ -8,3 +8,12 @@ export function generateAccount(): ServerAccount {
 		Email: faker.internet.exampleEmail()
 	};
 }
+
+export function generateChatroom() {
+	return {
+		Name: faker.lorem.word(8),
+		Description: faker.hacker.phrase(),
+		Background: "",
+		Private: faker.datatype.boolean(),
+	}
+}

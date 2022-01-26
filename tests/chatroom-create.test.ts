@@ -105,5 +105,54 @@ describe("server", () => {
 
 			client.emit("ChatRoomCreate", chatroomData);
 		});
+
+		describe('and an already existing chatroom', () => {
+
+			let client2;
+			let testAccount2 = null;
+			let testChatroom = null;
+			beforeEach(async () => {
+				const accounts = DB.database.collection('Accounts');
+				testAccount2 = FakeData.generateAccount();
+				accounts.deleteMany({ AccountName: testAccount2.AccountName });
+
+				await DB.createAccount(testAccount2.AccountName, testAccount2.Password, testAccount2.Name, testAccount2.Email);
+
+				client2 = await Club.createClient();
+				await Club.loginAccount(client2, testAccount2.AccountName, testAccount2.Password);
+
+				testChatroom = FakeData.generateChatroom();
+				await Club.createChatroom(client2, testChatroom);
+			});
+
+			afterEach(() => {
+				if (client2.connected) {
+					client2.disconnect();
+				}
+				client2.close();
+				const accounts = DB.database.collection('Accounts');
+				accounts.deleteMany({ AccountName: testAccount2.AccountName });
+			});
+
+			it('fails to create a duplicate chatroom', (done) => {
+				expect.assertions(2);
+
+				const chatroomData = {
+					Name: testChatroom.Name,
+					Description: "",
+					Background: "",
+					Private: false,
+				}
+
+				expect(client.connected).toBe(true);
+
+				client.on("ChatRoomCreateResponse", (reply) => {
+					expect(reply).toBe("RoomAlreadyExist");
+					done();
+				});
+
+				client.emit("ChatRoomCreate", chatroomData);
+			});
+		});
 	});
 });
