@@ -87,11 +87,9 @@ describe("client", () => {
 			expect(client.connected).toBe(true);
 
 			Club.loginAccount(client, testAccount.AccountName, "not the correct password")
-				.catch((err) => { done(err) })
-				.then((account) => {
-					expect(account).toBe("InvalidNamePassword");
-					done();
-				});
+				.catch((err: Error) => {
+					expect(err.message).toBe('Failed to login account '+testAccount.AccountName);
+					done() });
 		});
 	});
 

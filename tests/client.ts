@@ -24,9 +24,13 @@ export class Club {
 	}
 
 	static loginAccount(client: Socket, accountname: string, password: string) {
-		return withTimeout(TIMEOUT, new Promise((resolve) => {
+		return withTimeout(TIMEOUT, new Promise((resolve, reject) => {
 			client.once("LoginResponse", (arg) => {
-				resolve(arg);
+				if (arg === "InvalidNamePassword") {
+					reject(new Error(`Failed to login account ${accountname}`));
+				} else {
+					resolve(arg);
+				}
 			});
 			
 			client.emit("AccountLogin", { AccountName: accountname, Password: password });
