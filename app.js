@@ -197,6 +197,7 @@ function OnLogin(socket) {
 	socket.on("ChatRoomSearch", function(data) { ChatRoomSearch(data, socket); });
 	socket.on("ChatRoomCreate", function(data) { ChatRoomCreate(data, socket); });
 	socket.on("ChatRoomJoin", function(data) { ChatRoomJoin(data, socket); });
+	socket.on("ChatRoomCreateOrJoin", function(data) { ChatRoomCreateOrJoin(data, socket); })
 	socket.on("ChatRoomLeave", function() { ChatRoomLeave(socket); });
 	socket.on("ChatRoomChat", function(data) { ChatRoomChat(data, socket); });
 	socket.on("ChatRoomCharacterUpdate", function(data) { ChatRoomCharacterUpdate(data, socket); });
@@ -809,6 +810,71 @@ function ChatRoomCreate(data, socket) {
 
 }
 
+// Creates the room, or joins it if it already exists - resolves a race condition with multiple people rejoining the same non-existent room with recreate
+function ChatRoomCreateOrJoin(data, socket, retry) {
+	// Check for too many retries
+	if (retry > 50) {
+		socket.emit("ChatRoomCreateResponse", "RoomAlreadyExist");
+		return;
+	}
+
+	let roomName = data?.Name;
+	if (!roomName) {
+		// empty room name found in data or not provided at all
+		return;
+	}
+	// if this is a retry, add a number to roomname and increment retry count
+	if (retry) {
+		roomName = `${roomName.substring(0, 16)} ${retry}`;
+		retry += 1;
+	} else {
+		retry = 2;
+	}
+
+	const Acc = AccountGet(socket.id);
+	const Room = ChatRoom.find(room => room.Name.toUpperCase().trim() === roomName.toUpperCase().trim() && Acc.Environment == Room.Environment);
+	// Room does not exist, create it
+	if (!Room) {
+		data.Name = roomName;
+		ChatRoomCreate(data, socket);
+		return;
+	}
+
+	// Room full, retry next
+	if (Room.Account.length >= Room.Limit) {
+		ChatRoomCreateOrJoin(data, socket, retry);
+	}
+
+	// User is banned from the room
+	if (Room.Ban.includes(Acc.MemberNumber)) {
+		ChatRoomCreateOrJoin(data, socket, retry);
+	}
+
+	// Room is locked and user is not admin
+	if (Room.Locked && !Room.Admin.includes(Acc.MemberNumber)) {
+		ChatRoomCreateOrJoin(data, socket, retry);
+	}
+
+	// Room is available for the player to join
+
+	// Remove player from existing room, if in one -- should never be the case unless people make naughty modifications to the client
+	if (Acc.ChatRoom && Acc.ChatRoom.ID !== Room.ID) {
+		ChatRoomRemove(Acc, "ServerLeave", []);
+	}
+
+	// Add player to the room
+	AddAccountToRoom(Room, socket);
+}
+
+function AddAccountToRoom(Room, socket) {
+	const Acc = AccountGet(socket.id);
+	Acc.ChatRoom = Room;
+	Room.Account.push(Acc);
+	socket.join("chatroom-" + Room.ID);
+	ChatRoomSyncMemberJoin(Room, Acc);
+	ChatRoomMessage(Room, Acc.MemberNumber, "ServerEnter", "Action", null, [{ Tag: "SourceCharacter", Text: Acc.Name, MemberNumber: Acc.MemberNumber }]);
+}
+
 // Join an existing chat room
 function ChatRoomJoin(data, socket) {
 
@@ -832,11 +898,8 @@ function ChatRoomJoin(data, socket) {
 										ChatRoomRemove(Acc, "ServerLeave", []);
 										Acc.ChatRoom = ChatRoom[C];
 										if (ChatRoom[C] != null) {
-											ChatRoom[C].Account.push(Acc);
-											socket.join("chatroom-" + ChatRoom[C].ID);
 											socket.emit("ChatRoomSearchResponse", "JoinedRoom");
-											ChatRoomSyncMemberJoin(ChatRoom[C], Acc);
-											ChatRoomMessage(ChatRoom[C], Acc.MemberNumber, "ServerEnter", "Action", null, [{ Tag: "SourceCharacter", Text: Acc.Name, MemberNumber: Acc.MemberNumber }]);
+											AddAccountToRoom(ChatRoom[C], socket);
 										}
 										return;
 									} else {
