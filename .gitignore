@@ -3,3 +3,5 @@ log.txt
 restart.bat
 *.bat
 .idea
+.env
+*.log
