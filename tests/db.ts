@@ -41,6 +41,9 @@ export class DbClient {
 			Lovership: [],
 		}
 
+		if (await this.database.collection("Accounts").findOne({ AccountName: account }))
+			throw new Error(`Duplicate account: ${account}`);
+
 		return await this.database.collection("Accounts").insertOne(data);
 	}
 }
