@@ -4,6 +4,13 @@ import { withTimeout } from "./helpers";
 const TIMEOUT = 2000;
 const DOCKER_SERVER_URL = "http://localhost:4288";
 
+export class ClientError extends Error {
+	constructor(name: string, message?: string) {
+		super(message)
+		this.name = name;
+	}
+}
+
 export class Club {
 	
 	/**
@@ -25,11 +32,11 @@ export class Club {
 
 	static loginAccount(client: Socket, accountname: string, password: string) {
 		return withTimeout(TIMEOUT, new Promise((resolve, reject) => {
-			client.once("LoginResponse", (arg) => {
-				if (arg === "InvalidNamePassword") {
-					reject(new Error(`Failed to login account ${accountname}`));
+			client.once("LoginResponse", (reply) => {
+				if (reply === "InvalidNamePassword") {
+					reject(new ClientError(reply, `Failed to login account ${accountname}`));
 				} else {
-					resolve(arg);
+					resolve(reply);
 				}
 			});
 			
@@ -46,7 +53,7 @@ export class Club {
 				if (reply === "ChatRoomCreated") {
 					resolve(null);
 				} else {
-					reject(new Error(`Failed to create chatroom: ${reply}`));
+					reject(new ClientError(reply, `Failed to create chatroom: ${reply}, ${JSON.stringify(chatroom)}`));
 				}
 			});
 
