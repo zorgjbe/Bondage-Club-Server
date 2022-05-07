@@ -30,6 +30,7 @@
 		"sync-request": "^6.1.0"
 	},
 	"devDependencies": {
+		"@faker-js/faker": "^7.6.0",
 		"@types/bcrypt": "^5.0.0",
 		"@types/jest": "^29.2.5",
 		"@types/mongodb": "^3.4.1",
