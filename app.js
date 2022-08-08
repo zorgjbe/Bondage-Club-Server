@@ -43,7 +43,7 @@ var Options = {
 };
 if ((process.env.CORS_ORIGIN0 != null) && (process.env.CORS_ORIGIN0 != ""))
 	Options.cors = { origin: [process.env.CORS_ORIGIN0 || "", process.env.CORS_ORIGIN1 || "", process.env.CORS_ORIGIN2 || "", process.env.CORS_ORIGIN3 || "", process.env.CORS_ORIGIN4 || "", process.env.CORS_ORIGIN5 || ""] };
-else 
+else
 	Options.cors = { origin: '*' };
 var IO = new socketio.Server(App, Options);
 
@@ -207,6 +207,7 @@ DatabaseClient.connect(DatabaseURL, { useUnifiedTopology: true, useNewUrlParser:
 
 // Setups socket on successful login or account creation
 function OnLogin(socket) {
+	console.log(`OnLogin: ${socket.id}`);
 	socket.removeAllListeners("AccountCreate");
 	socket.removeAllListeners("AccountLogin");
 	socket.removeAllListeners("PasswordReset");
@@ -252,6 +253,7 @@ function CommonTime() {
 
 // Creates a new account by creating its file
 function AccountCreate(data, socket) {
+	console.debug(`AccountCreate: ${socket.id} => ${JSON.stringify(data)}`);
 
 	// Makes sure the account comes with a name and a password
 	if ((data != null) && (typeof data === "object") && (data.Name != null) && (data.AccountName != null) && (data.Password != null) && (data.Email != null) && (typeof data.Name === "string") && (typeof data.AccountName === "string") && (typeof data.Password === "string") && (typeof data.Email === "string")) {
@@ -342,9 +344,11 @@ function AccountPurgeInfo(A) {
 
 // Load a single account file
 function AccountLogin(data, socket) {
+	console.debug(`AccountLogin: ${socket.id} => ${JSON.stringify(data)}`);
 
 	// Makes sure the login comes with a name and a password
 	if (!data || typeof data !== "object" || typeof data.AccountName !== "string" || typeof data.Password !== "string") {
+		console.warn('Invalid login request received');
 		socket.emit("LoginResponse", "InvalidNamePassword");
 		return;
 	}
@@ -357,6 +361,7 @@ function AccountLogin(data, socket) {
 	pendingLogins.add(socket);
 
 	if (loginQueue.length > 16) {
+		console.info("More than 16 logins in progress, queuing…");
 		socket.emit("LoginQueue", loginQueue.length);
 	}
 
@@ -385,6 +390,7 @@ function AccountLoginRun() {
 	// Get next waiting login
 	if (loginQueue.length === 0) return;
 	let nx = loginQueue[0];
+	console.info("Processing login queue");
 
 	// If client disconnected during wait, ignore it
 	while (!nx[0].connected) {
@@ -431,6 +437,7 @@ async function AccountLoginProcess(socket, AccountName, Password) {
 
 	if (!socket.connected) return;
 	if (result === null) {
+		console.warn(`Invalid account: ${AccountName}`);
 		socket.emit("LoginResponse", "InvalidNamePassword");
 		return;
 	}
@@ -440,6 +447,7 @@ async function AccountLoginProcess(socket, AccountName, Password) {
 
 	if (!socket.connected) return;
 	if (!res) {
+		console.warn(`Invalid password for account: ${AccountName}`);
 		socket.emit("LoginResponse", "InvalidNamePassword");
 		return;
 	}
@@ -447,6 +455,7 @@ async function AccountLoginProcess(socket, AccountName, Password) {
 	// Disconnect duplicated logged accounts
 	for (const Acc of Account) {
 		if (Acc != null && Acc.AccountName === result.AccountName) {
+			console.warn(`Account logged in elsewhere: ${AccountName}`);
 			Acc.Socket.emit("ForceDisconnect", "ErrorDuplicatedLogin");
 			Acc.Socket.disconnect(true);
 			AccountRemove(Acc.ID);
@@ -467,6 +476,7 @@ async function AccountLoginProcess(socket, AccountName, Password) {
 
 	// Sets the last login date
 	result.LastLogin = CommonTime();
+	console.info(`Updating last login time for account: ${AccountName}`);
 	Database.collection(AccountCollection).updateOne({ AccountName : result.AccountName }, { $set: { LastLogin: result.LastLogin } }, function(err, res) { if (err) throw err; });
 
 	// Logs the account
@@ -483,7 +493,7 @@ async function AccountLoginProcess(socket, AccountName, Password) {
 	result.Socket = socket;
 	AccountSendServerInfo(socket);
 	AccountPurgeInfo(result);
-	
+
 }
 
 // Returns TRUE if the object is empty
@@ -496,6 +506,7 @@ function ObjectEmpty(obj) {
 
 // Updates any account data except the basic ones that cannot change
 function AccountUpdate(data, socket) {
+	console.debug(`AccountUpdate: ${socket.id} => ${JSON.stringify(data)}`);
 	if ((data != null) && (typeof data === "object") && !Array.isArray(data))
 		for (const Acc of Account)
 			if (Acc.ID == socket.id) {
@@ -573,13 +584,16 @@ function AccountUpdate(data, socket) {
 
 // Updates email address
 function AccountUpdateEmail(data, socket) {
+	console.debug(`AccountUpdateEmail: ${socket.id} => ${JSON.stringify(data)}`);
 	if ((data != null) && (typeof data === "object") && (data.EmailOld != null) && (data.EmailNew != null) && (typeof data.EmailOld === "string") && (typeof data.EmailNew === "string")) {
 		var Acc = AccountGet(socket.id);
 		var E = /^[a-zA-Z0-9@.!#$%&'*+/=?^_`{|}~-]+$/;
 		if ((Acc != null) && (data.EmailNew.match(E) || (data.EmailNew == "")) && (data.EmailNew.length <= 100) && (data.EmailNew.match(E) || (data.EmailNew == "")) && (data.EmailNew.length <= 100))
+			console.info('AccountUpdateEmail: email valid');
 			Database.collection(AccountCollection).find({ AccountName : Acc.AccountName }).sort({MemberNumber: -1}).limit(1).toArray(function(err, result) {
 				if (err) throw err;
 				if ((result != null) && (typeof result === "object") && (result.length > 0) && data.EmailOld == result[0].Email) {
+					// console.info('AccountUpdateEmail: account valid, updating email');
 					socket.emit("AccountQueryResult", { Query: "EmailUpdate", Result: true });
 					Database.collection(AccountCollection).updateOne({ AccountName : Acc.AccountName }, { $set: { Email: data.EmailNew }}, function(err, res) { if (err) throw err; });
 					console.log("Account " + Acc.AccountName + " updated email from " + data.EmailOld + " to " + data.EmailNew);
@@ -587,12 +601,16 @@ function AccountUpdateEmail(data, socket) {
 				}
 			});
 
+		console.info('AccountUpdateEmail: failed');
 		socket.emit("AccountQueryResult", { Query: "EmailUpdate", Result: false });
+	} else {
+		console.info('AccountUpdateEmail: malformed');
 	}
 }
 
 // When the client account sends a query to the server
 function AccountQuery(data, socket) {
+	console.debug(`AccountQuery: ${socket.id} => ${JSON.stringify(data)}`);
 	if ((data != null) && (typeof data === "object") && !Array.isArray(data) && (data.Query != null) && (typeof data.Query === "string")) {
 
 		// Finds the current account
@@ -652,6 +670,7 @@ function AccountQuery(data, socket) {
 
 // When a player wants to beep another player
 function AccountBeep(data, socket) {
+	console.debug(`AccountBeep: ${socket.id} => ${JSON.stringify(data)}`);
 	if ((data != null) && (typeof data === "object") && !Array.isArray(data) && (data.MemberNumber != null) && (typeof data.MemberNumber === "number")) {
 
 		// Make sure both accounts are online, friends and sends the beep to the friend
@@ -699,8 +718,10 @@ function AccountGet(ID) {
 
 // When a user searches for a chat room
 function ChatRoomSearch(data, socket) {
+	console.debug(`ChatRoomSearch: ${socket.id} => ${JSON.stringify(data)}`);
 	if ((data != null) && (typeof data === "object") && (data.Query != null) && (typeof data.Query === "string") && (data.Query.length <= 20)) {
 
+		console.time('ChatRoomSearch');
 		// Finds the current account
 		var Acc = AccountGet(socket.id);
 		if (Acc != null) {
@@ -777,7 +798,7 @@ function ChatRoomSearch(data, socket) {
 
 // Creates a new chat room
 function ChatRoomCreate(data, socket) {
-
+	console.debug(`ChatRoomCreate: ${socket.id} => ${JSON.stringify(data)}`);
 	// Make sure we have everything to create it
 	if ((data != null) && (typeof data === "object") && (data.Name != null) && (data.Description != null) && (data.Background != null) && (data.Private != null) && (typeof data.Name === "string") && (typeof data.Description === "string") && (typeof data.Background === "string") && (typeof data.Private === "boolean")) {
 
@@ -829,6 +850,7 @@ function ChatRoomCreate(data, socket) {
 				BlockCategory: data.BlockCategory,
 				Admin: data.Admin
 			};
+			console.debug(`ChatRoomCreate: ${socket.id} => ${JSON.stringify(NewRoom)}`);
 			ChatRoom.push(NewRoom);
 			Acc.ChatRoom = NewRoom;
 			NewRoom.Account.push(Acc);
@@ -845,6 +867,7 @@ function ChatRoomCreate(data, socket) {
 
 // Join an existing chat room
 function ChatRoomJoin(data, socket) {
+	console.debug(`ChatRoomJoin: ${socket.id} => ${JSON.stringify(data)}`);
 
 	// Make sure we have everything to join it
 	if ((data != null) && (typeof data === "object") && (data.Name != null) && (typeof data.Name === "string") && (data.Name != "")) {
@@ -933,6 +956,7 @@ function ChatRoomRemove(Acc, Reason, Dictionary) {
 
 // Finds the current account and removes it from it's chat room, nothing is returned to the client
 function ChatRoomLeave(socket) {
+	console.debug(`ChatRoomLeave: ${socket.id}`);
 	var Acc = AccountGet(socket.id);
 	if (Acc != null) ChatRoomRemove(Acc, "ServerLeave", []);
 }
@@ -954,6 +978,7 @@ function ChatRoomMessage(CR, Sender, Content, Type, Target, Dictionary) {
 
 // When a user sends a chat message, we propagate it to everyone in the room
 function ChatRoomChat(data, socket) {
+	console.debug(`ChatRoomChat: ${socket.id} => ${JSON.stringify(data)}`);
 	if ((data != null) && (typeof data === "object") && (data.Content != null) && (data.Type != null) && (typeof data.Content === "string") && (typeof data.Type === "string") && (ChatRoomMessageType.indexOf(data.Type) >= 0) && (data.Content.length <= 1000)) {
 		var Acc = AccountGet(socket.id);
 		if (Acc != null) ChatRoomMessage(Acc.ChatRoom, Acc.MemberNumber, data.Content.trim(), data.Type, data.Target, data.Dictionary);
@@ -962,6 +987,7 @@ function ChatRoomChat(data, socket) {
 
 // When a user sends a game packet (for LARP or other games), we propagate it to everyone in the room
 function ChatRoomGame(data, socket) {
+	console.debug(`ChatRoomGame: ${socket.id} => ${JSON.stringify(data)}`);
 	if ((data != null) && (typeof data === "object")) {
 		var R = Math.random();
 		var Acc = AccountGet(socket.id);
@@ -1162,6 +1188,7 @@ function ChatRoomSyncSingle(Acc, SourceMemberNumber) {
 
 // Updates a character from the chat room
 function ChatRoomCharacterUpdate(data, socket) {
+	console.debug(`ChatRoomCharacterUpdate: ${socket.id} => ${JSON.stringify(data)}`);
 	if ((data != null) && (typeof data === "object") && (data.ID != null) && (typeof data.ID === "string") && (data.ID != "") && (data.Appearance != null)) {
 		var Acc = AccountGet(socket.id);
 		if ((Acc != null) && (Acc.ChatRoom != null))
@@ -1179,6 +1206,7 @@ function ChatRoomCharacterUpdate(data, socket) {
 
 // Updates a character expression for a chat room, this does not update the database
 function ChatRoomCharacterExpressionUpdate(data, socket) {
+	console.debug(`ChatRoomCharacterExpressionUpdate: ${socket.id} => ${JSON.stringify(data)}`);
 	if ((data != null) && (typeof data === "object") && (typeof data.Group === "string") && (data.Group != "")) {
 		const Acc = AccountGet(socket.id);
 		if (Acc && Array.isArray(data.Appearance) && data.Appearance.length >= 5)
@@ -1191,6 +1219,7 @@ function ChatRoomCharacterExpressionUpdate(data, socket) {
 
 // Updates a character pose for a chat room, this does not update the database
 function ChatRoomCharacterPoseUpdate(data, socket) {
+	console.debug(`ChatRoomCharacterPoseUpdate: ${socket.id} => ${JSON.stringify(data)}`);
 	if ((data != null) && (typeof data === "object")) {
 		if (typeof data.Pose !== "string" && !Array.isArray(data.Pose)) data.Pose = null;
 		if (Array.isArray(data.Pose)) data.Pose = data.Pose.filter(P => typeof P === "string");
@@ -1204,6 +1233,7 @@ function ChatRoomCharacterPoseUpdate(data, socket) {
 
 // Updates a character arousal meter for a chat room, this does not update the database
 function ChatRoomCharacterArousalUpdate(data, socket) {
+	console.debug(`ChatRoomCharacterArousalUpdate: ${socket.id} => ${JSON.stringify(data)}`);
 	if ((data != null) && (typeof data === "object")) {
 		var Acc = AccountGet(socket.id);
 		if ((Acc != null) && (Acc.ArousalSettings != null) && (typeof Acc.ArousalSettings === "object")) {
@@ -1220,6 +1250,7 @@ function ChatRoomCharacterArousalUpdate(data, socket) {
 
 // Updates a character arousal meter for a chat room, this does not update the database
 function ChatRoomCharacterItemUpdate(data, socket) {
+	console.debug(`ChatRoomCharacterItemUpdate: ${socket.id} => ${JSON.stringify(data)}`);
 	if ((data != null) && (typeof data === "object") && (data.Target != null) && (typeof data.Target === "number") && (data.Group != null) && (typeof data.Group === "string")) {
 
 		// Make sure the source account isn't banned from the chat room and has access to use items on the target
@@ -1238,6 +1269,7 @@ function ChatRoomCharacterItemUpdate(data, socket) {
 
 // When an administrator account wants to act on another account in the room
 function ChatRoomAdmin(data, socket) {
+	console.debug(`ChatRoomAdmin: ${socket.id} => ${JSON.stringify(data)}`);
 
 	if ((data != null) && (typeof data === "object") && (data.MemberNumber != null) && (typeof data.MemberNumber === "number") && (data.Action != null) && (typeof data.Action === "string")) {
 
@@ -1440,6 +1472,7 @@ function ChatRoomGetAllowItem(Source, Target) {
 
 // Returns TRUE if we allow applying an item from a character to another
 function ChatRoomAllowItem(data, socket) {
+	console.debug(`ChatRoomAllowItem: ${socket.id} => ${JSON.stringify(data)}`);
 	if ((data != null) && (typeof data === "object") && (data.MemberNumber != null) && (typeof data.MemberNumber === "number")) {
 
 		// Gets the source account and target account to check if we allow or not
@@ -1464,6 +1497,7 @@ function PasswordResetSetNumber(AccountName, ResetNumber) {
 
 // Generates a password reset number and sends it to the user
 function PasswordReset(data, socket) {
+	console.debug(`PasswordReset: ${socket.id} => ${JSON.stringify(data)}`);
 	if ((data != null) && (typeof data === "string") && (data != "") && data.match(/^[a-zA-Z0-9@.]+$/) && (data.length >= 5) && (data.length <= 100) && (data.indexOf("@") > 0) && (data.indexOf(".") > 0)) {
 
 		// One email reset password per 5 seconds to prevent flooding
@@ -1554,6 +1588,7 @@ function PasswordResetProcess(data, socket) {
  * @param {socketio.Socket} socket
  */
 function AccountOwnership(data, socket) {
+	console.debug(`AccountOwnership: ${socket.id} => ${JSON.stringify(data)}`);
 	if (data != null && typeof data === "object" && typeof data.MemberNumber === "number") {
 
 		// The submissive can flush it's owner at any time in the trial, or after a delay if collared.  Players on Extreme mode cannot break the full ownership.
@@ -1577,7 +1612,7 @@ function AccountOwnership(data, socket) {
 		// Can release a target that's not in the chatroom
 		if (!TargetAcc && (data.Action === "Release") && (Acc.MemberNumber != null) && (data.MemberNumber != null)) {
 
-			// Gets the account linked to that member number, make sure 
+			// Gets the account linked to that member number, make sure
 			Database.collection(AccountCollection).findOne({ MemberNumber : data.MemberNumber }, function(err, result) {
 				if (err) throw err;
 				if ((result != null) && (result.MemberNumber != null) && (result.MemberNumber === data.MemberNumber) && (result.Ownership != null) && (result.Ownership.MemberNumber === Acc.MemberNumber)) {
@@ -1698,6 +1733,7 @@ function AccountOwnership(data, socket) {
 
 // Gets the current lovership status between two players in the same chatroom, can also trigger the progress in the relationship
 function AccountLovership(data, socket) {
+	console.debug(`AccountLovership: ${socket.id} => ${JSON.stringify(data)}`);
 	if ((data != null) && (typeof data === "object") && (data.MemberNumber != null) && (typeof data.MemberNumber === "number")) {
 
 		// Update the lovership and delete all unnecessary information
@@ -1719,6 +1755,7 @@ function AccountLovership(data, socket) {
 		// A Lover can break her relationship any time if not wed, or after a delay if official
 		var Acc = AccountGet(socket.id);
 		if ((Acc != null) && (data.Action != null) && (data.Action === "Break")) {
+			console.debug(`AccountLovership: entering "Break"`);
 
 			var AccLoversNumbers = [];
 			for (const Lover of Acc.Lovership) {
@@ -1727,6 +1764,7 @@ function AccountLovership(data, socket) {
 				else { AccLoversNumbers.push(-1); }
 			}
 			var AL = AccLoversNumbers.indexOf(data.MemberNumber);
+			console.debug(`AccountLovership: loverlist: ${AccLoversNumbers}`);
 
 			// breaking with other players
 			if ((Acc.Lovership != null) && (AL >= 0) && (Acc.Lovership[AL].Stage != null)
@@ -1738,6 +1776,8 @@ function AccountLovership(data, socket) {
 					if (err) throw err;
 					if ((result != null) && (typeof result === "object") && (result.length > 0)) {
 						P = result[0].Lovership;
+
+						console.debug(`AccountLovership: other character lover list:`, P);
 
 						var TargetLoversNumbers = [];
 						if ((P != null) && Array.isArray(P))
@@ -1755,12 +1795,17 @@ function AccountLovership(data, socket) {
 									ChatRoomSyncCharacter(OtherAcc.ChatRoom, OtherAcc.MemberNumber, OtherAcc.MemberNumber);
 							}
 
+						console.debug(`AccountLovership: updating other character:`, P);
+
 						AccountUpdateLovership(P, data.MemberNumber, null,false);
 
 					}
+
 					// Updates the account that triggered the break up
+					console.debug(`AccountLovership: updating our lover list:`, Acc.Lovership);
 					if (Array.isArray(Acc.Lovership)) Acc.Lovership.splice(AL, 1);
 					else Acc.Lovership = [];
+					console.debug(`AccountLovership: lover list updated:`, Acc.Lovership);
 					AccountUpdateLovership(Acc.Lovership, Acc.MemberNumber);
 				});
 				return;
@@ -1910,6 +1955,7 @@ function AccountLovership(data, socket) {
 
 // Sets a new account difficulty (0 is easy/roleplay, 1 is normal/regular, 2 is hard/hardcore, 3 is very hard/extreme)
 function AccountDifficulty(data, socket) {
+	console.debug(`AccountDifficulty: ${socket.id} => ${JSON.stringify(data)}`);
 	if ((data != null) && (typeof data === "number") && (data >= 0) && (data <= 3)) {
 
 		// Gets the current account
