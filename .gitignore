@@ -5,3 +5,4 @@ restart.bat
 .idea
 .env
 *.log
+coverage/*
