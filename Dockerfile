@@ -4,4 +4,6 @@ WORKDIR /app
 ADD package*.json /app/
 RUN npm ci
 ADD . /app/
-CMD [ "npm", "start" ]
+# ENV DEBUG=*
+# ENV NODE_OPTIONS='--inspect=0.0.0.0:9229 --inspect-brk'
+CMD [ "npm", "run", "start:debug"]
