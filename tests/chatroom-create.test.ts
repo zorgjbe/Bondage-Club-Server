@@ -1,7 +1,7 @@
 import { Socket } from "socket.io-client";
-import { Club } from "./client";
+import { Client } from "./client";
 import { DbClient } from "./db";
-import { generateAccount } from "./fake";
+import { generateAccount, generateChatroom } from "./fake";
 
 describe("server", () => {
 
@@ -16,34 +16,24 @@ describe("server", () => {
 	});
 
 	// API client
-	let client: Socket;
+	let client: Client;
 	beforeEach(async () => {
-		client = await Club.createClient();
+		client = new Client(DB);
+		await client.connect();
 	});
 
 	afterEach(() => {
-		if (client.connected) {
+		if (client.isConnected()) {
 			client.disconnect();
 		}
-		client.close();
-	});
-
-	// Test user cleanup
-	let testAccount: ServerAccount;
-	beforeEach(() => {
-		const accounts = DB.database.collection('Accounts');
-		testAccount = generateAccount();
-		accounts.deleteMany({ AccountName: testAccount.AccountName });
-	});
-	afterEach(() => {
-		const accounts = DB.database.collection('Accounts');
-		accounts.deleteMany({ AccountName: testAccount.AccountName });
+		client.cleanupAccount();
+		// @ts-ignore
+		client = null;
 	});
 
 	describe('given a valid account', () => {
 		beforeEach(async () => {
-			await DB.createAccount(testAccount.AccountName, testAccount.Password, testAccount.Name, testAccount.Email);
-			await Club.loginAccount(client, testAccount.AccountName, testAccount.Password);
+			await client.createAccount();
 		});
 
 		test("can create chatrooms with minimal data", (done) => {
@@ -56,14 +46,14 @@ describe("server", () => {
 				Private: false,
 			}
 
-			expect(client.connected).toBe(true);
+			expect(client.isConnected()).toBe(true);
 
-			client.on("ChatRoomCreateResponse", (reply) => {
+			client.socket.on("ChatRoomCreateResponse", (reply) => {
 				expect(reply).toBe("ChatRoomCreated");
 				done();
 			});
 
-			client.emit("ChatRoomCreate", chatroomData);
+			client.socket.emit("ChatRoomCreate", chatroomData);
 		});
 
 		it("errors if name is too long", (done) => {
@@ -76,14 +66,14 @@ describe("server", () => {
 				Private: false,
 			}
 
-			expect(client.connected).toBe(true);
+			expect(client.isConnected()).toBe(true);
 
-			client.on("ChatRoomCreateResponse", (reply) => {
+			client.socket.on("ChatRoomCreateResponse", (reply) => {
 				expect(reply).toBe("InvalidRoomData");
 				done();
 			});
 
-			client.emit("ChatRoomCreate", chatroomData);
+			client.socket.emit("ChatRoomCreate", chatroomData);
 		});
 
 		it("errors if background is too long", (done) => {
@@ -96,62 +86,55 @@ describe("server", () => {
 				Private: false,
 			}
 
-			expect(client.connected).toBe(true);
+			expect(client.isConnected()).toBe(true);
 
-			client.on("ChatRoomCreateResponse", (reply) => {
+			client.socket.on("ChatRoomCreateResponse", (reply) => {
 				expect(reply).toBe("InvalidRoomData");
 				done();
 			});
 
-			client.emit("ChatRoomCreate", chatroomData);
+			client.socket.emit("ChatRoomCreate", chatroomData);
 		});
 
 		describe('and an already existing chatroom', () => {
 
-			let client2;
-			let testAccount2 = null;
-			let testChatroom = null;
+			let client2: Client;
+			let testChatroom: ServerChatRoomCreateData | null = null;
 			beforeEach(async () => {
-				const accounts = DB.database.collection('Accounts');
-				testAccount2 = FakeData.generateAccount();
-				accounts.deleteMany({ AccountName: testAccount2.AccountName });
+				client2 = new Client(DB);
+				await client2.createAccount();
 
-				await DB.createAccount(testAccount2.AccountName, testAccount2.Password, testAccount2.Name, testAccount2.Email);
-
-				client2 = await Club.createClient();
-				await Club.loginAccount(client2, testAccount2.AccountName, testAccount2.Password);
-
-				testChatroom = FakeData.generateChatroom();
-				await Club.createChatroom(client2, testChatroom);
+				testChatroom = generateChatroom();
+				await client2.createChatroom(testChatroom);
 			});
 
 			afterEach(() => {
-				if (client2.connected) {
+				if (client2.isConnected()) {
 					client2.disconnect();
 				}
-				client2.close();
-				const accounts = DB.database.collection('Accounts');
-				accounts.deleteMany({ AccountName: testAccount2.AccountName });
+				client2.cleanupAccount();
+				// @ts-ignore
+				client2 = null;
 			});
 
 			it('fails to create a duplicate chatroom', (done) => {
 				expect.assertions(2);
 
 				const chatroomData = {
-					Name: testChatroom.Name,
+					Name: testChatroom!.Name,
 					Description: "",
 					Background: "",
 					Private: false,
 				}
 
-				expect(client.connected).toBe(true);
+				expect(client.isConnected()).toBe(true);
 
-				client.on("ChatRoomCreateResponse", (reply) => {
+				client.socket.on("ChatRoomCreateResponse", (reply) => {
 					expect(reply).toBe("RoomAlreadyExist");
 					done();
 				});
 
-				client.emit("ChatRoomCreate", chatroomData);
+				client.socket.emit("ChatRoomCreate", chatroomData);
 			});
 		});
 	});

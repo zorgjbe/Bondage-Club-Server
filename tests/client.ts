@@ -1,9 +1,15 @@
 import { io, Socket } from "socket.io-client";
+import { generateAccount } from "./fake";
 import { withTimeout } from "./helpers";
+import { DbClient } from "./db";
+import { Db } from "mongodb";
 
 const TIMEOUT = 2000;
 const DOCKER_SERVER_URL = "http://localhost:4288";
 
+/**
+ * Client error class
+ */
 export class ClientError extends Error {
 	constructor(name: string, message?: string) {
 		super(message)
@@ -11,28 +17,95 @@ export class ClientError extends Error {
 	}
 }
 
-export class Club {
+export class Client {
 	
-	/**
-	 * Create a test client.
-	 *
-	 * @param connected - Connect the client to the server
-	 * @returns {Promise<Socket>}
-	 */
-	static createClient(connected: boolean = true): Promise<Socket> {
-		const client = io(DOCKER_SERVER_URL);
-		if (!connected) {
-			return new Promise((resolve) => resolve(client))
-		} else {
-			return withTimeout(TIMEOUT, new Promise((resolve) => {
-				client.on('connect', () => { resolve(client); });
-			}));
-		}
+	public socket: Socket;
+	public account: ServerAccount | Account;
+	private db?: DbClient;
+
+	constructor(db?: DbClient) {
+		this.socket = io(DOCKER_SERVER_URL);
+		// @ts-ignore
+		this.account = null;
+		this.db = db;
 	}
 
-	static loginAccount(client: Socket, accountname: string, password: string) {
+	isConnected() {
+		return this.socket.connected;
+	}
+
+	connect() {
+		return withTimeout(TIMEOUT, new Promise((resolve) => {
+			this.socket.on('connect', () => { resolve(true); });
+		}));
+	}
+
+	async disconnect() {
+		await this.socket.disconnect();
+		this.socket.close();
+	}
+
+	/**
+	 * Generate account data for the client
+	 */
+	generateAccount(accountData?: ServerAccount) {
+		if (!this.db) {
+			throw new Error('Client has no access to database');
+		}
+		if (this.account) {
+			throw new Error('Client already has account data generated');
+		}
+
+		do {
+			this.account = generateAccount(accountData);
+		} while (!this.db.database.collection('Accounts').findOne({ AccountName: this.account.AccountName }));
+
+		return this.account;
+	}
+
+
+	/**
+	 * Remove the client's account from the database
+	 */
+	async cleanupAccount() {
+		if (!this.db) {
+			throw new Error('Client has no access to database');
+		}
+		if (!this.account) return;
+		await this.db.database.collection('Accounts').deleteOne({ AccountName: this.account.AccountName });
+		// @ts-ignore
+		this.account = null;
+	}
+
+	/**
+	 * Create the client's account
+	 */
+	async createAccount(accountData?: ServerAccount) {
+		if (!this.account) {
+			this.generateAccount(accountData);
+		}
+
 		return withTimeout(TIMEOUT, new Promise((resolve, reject) => {
-			client.once("LoginResponse", (reply) => {
+			this.socket.on("CreationResponse", (reply) => {
+				if (typeof reply === "string") {
+					reject(new ClientError(reply, `Failed to create account ${this.account.AccountName}`));
+				} else if (typeof reply !== "object") {
+					reject(new ClientError("InvalidResponse", `Unexpected response from server: ${reply}`));
+				} else {
+					const full = this.account as Account;
+					full.MemberNumber = reply.MemberNumber;
+					full.OnlineID = reply.OnlineID;
+					resolve(reply);
+				}
+			});
+			
+			this.socket.emit("AccountCreate", this.account);
+		}));
+	}
+
+	loginAccount(accountname: string, password: string) {
+		return withTimeout(TIMEOUT, new Promise((resolve, reject) => {
+			this.socket.once("LoginResponse", (reply) => {
 				if (reply === "InvalidNamePassword") {
 					reject(new ClientError(reply, `Failed to login account ${accountname}`));
 				} else {
@@ -40,16 +113,16 @@ export class Club {
 				}
 			});
 			
-			client.emit("AccountLogin", { AccountName: accountname, Password: password });
+			this.socket.emit("AccountLogin", { AccountName: accountname, Password: password });
 		}));
 	}
 
 	/**
 	 * Create a chatroom.
 	 */
-	static createChatroom(client: Socket, chatroom: ServerChatRoomCreateData): Promise<void> {
+	createChatroom(chatroom: ServerChatRoomCreateData): Promise<void> {
 		return withTimeout(TIMEOUT, new Promise((resolve, reject) => {
-			client.once("ChatRoomCreateResponse", (reply) => {
+			this.socket.once("ChatRoomCreateResponse", (reply) => {
 				if (reply === "ChatRoomCreated") {
 					resolve(null);
 				} else {
@@ -57,9 +130,8 @@ export class Club {
 				}
 			});
 
-			client.emit("ChatRoomCreate", chatroom);
+			this.socket.emit("ChatRoomCreate", chatroom);
 		}));
-
 	}
 
 }

@@ -4,3 +4,8 @@ interface ServerAccount {
     Password: string;
     Email: string;
 }
+
+interface Account extends ServerAccount {
+    MemberNumber: number;
+    OnlineID: string;
+}

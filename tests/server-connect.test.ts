@@ -1,33 +1,33 @@
-import { io, Socket } from "socket.io-client";
+import { Client } from "./client";
 
 describe("server", () => {
-	let client: Socket;
+	let client: Client;
 
 	beforeAll(() => {
-		client = io(`http://localhost:4288`);
+		client = new Client();
 	});
 
 	afterAll(() => {
-		if (client.connected) {
+		if (client.isConnected()) {
 			client.disconnect();
 		}
-		client.close();
+		client.disconnect();
 	});
 
 	test("can connect and recieve banner", (done) => {
 		expect.assertions(4);
 
-		expect(client.connected).toBe(false);
+		expect(client.isConnected()).toBe(false);
 
-		client.once("ServerInfo", (msg: ServerInfoMessage) => {
+		client.socket.once("ServerInfo", (msg: ServerInfoMessage) => {
 			expect(msg.OnlinePlayers).toBeGreaterThanOrEqual(0);
 			expect(msg.Time).toBeGreaterThanOrEqual(0);
 			done();
 		});
 
-		client.on("connect", () => {
+		client.socket.on("connect", () => {
 			try {
-				expect(client.connected).toBe(true);
+				expect(client.isConnected()).toBe(true);
 			} catch (error) {
 				done(error);
 			}

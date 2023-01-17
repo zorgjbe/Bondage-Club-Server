@@ -1,5 +1,5 @@
 import { Socket } from "socket.io-client";
-import { Club } from "./client";
+import { Client } from "./client";
 import { DbClient } from "./db";
 import { generateAccount } from "./fake";
 
@@ -15,42 +15,33 @@ describe("client", () => {
 		await DB.disconnect();
 	});
 
-	let client: Socket;
+	let client: Client;
 	beforeEach(async () => {
-		client = await Club.createClient();
+		client = new Client(DB)
+		await client.connect();
 	});
 
-	afterEach(() => {
-		if (client.connected) {
+	afterEach(async () => {
+		if (client.isConnected()) {
 			client.disconnect();
 		}
-		client.close();
-	});
-
-	// Test user cleanup
-	let testAccount: ServerAccount;
-	beforeEach(async () => {
-		const accounts = DB.database.collection('Accounts');
-		testAccount = generateAccount();
-		await accounts.deleteMany({ AccountName: testAccount.AccountName });
-	});
-	afterEach(async () => {
-		const accounts = DB.database.collection('Accounts');
-		await accounts.deleteMany({ AccountName: testAccount.AccountName });
+		await client.cleanupAccount();
+		// @ts-ignore
+		client = null;
 	});
 
 	describe('given a valid account', () => {
 		beforeEach(async () => {
-			await DB.createAccount(testAccount.AccountName, testAccount.Password, testAccount.Name, testAccount.Email);
-			await Club.loginAccount(client, testAccount.AccountName, testAccount.Password);
+			await client.createAccount();
+			// await client.loginAccount();
 		});
 
 		test('can query online friends', (done) => {
 			expect.assertions(2);
 
-			expect(client.connected).toBe(true);
+			expect(client.isConnected()).toBe(true);
 
-			client.on('AccountQueryResult', (reply) => {
+			client.socket.on('AccountQueryResult', (reply) => {
 				expect(reply).toMatchObject({
 					Query: 'OnlineFriends',
 					Result: [],
@@ -58,15 +49,15 @@ describe("client", () => {
 				done();
 			})
 
-			client.emit('AccountQuery', { Query: 'OnlineFriends' });
+			client.socket.emit('AccountQuery', { Query: 'OnlineFriends' });
 		});
 
 		test('can query email linking status', (done) => {
 			expect.assertions(2);
 
-			expect(client.connected).toBe(true);
+			expect(client.isConnected()).toBe(true);
 
-			client.on('AccountQueryResult', (reply) => {
+			client.socket.on('AccountQueryResult', (reply) => {
 				expect(reply).toMatchObject({
 					Query: 'EmailStatus',
 					Result: true,
@@ -74,23 +65,24 @@ describe("client", () => {
 				done();
 			})
 
-			client.emit('AccountQuery', { Query: 'EmailStatus' });
+			client.socket.emit('AccountQuery', { Query: 'EmailStatus' });
 		});
 	});
 
 	describe('given a valid account with no email', () => {
 		beforeEach(async () => {
-			testAccount.Email = "";
-			await DB.createAccount(testAccount.AccountName, testAccount.Password, testAccount.Name, testAccount.Email);
-			await Club.loginAccount(client, testAccount.AccountName, testAccount.Password);
+			client.generateAccount();
+			client.account.Email = "";
+			await client.createAccount();
+			// await client.loginAccount();
 		});
 
 		test('can query email linking status', (done) => {
 			expect.assertions(2);
 
-			expect(client.connected).toBe(true);
+			expect(client.isConnected()).toBe(true);
 
-			client.on('AccountQueryResult', (reply) => {
+			client.socket.on('AccountQueryResult', (reply) => {
 				expect(reply).toMatchObject({
 					Query: 'EmailStatus',
 					Result: false,
@@ -98,7 +90,7 @@ describe("client", () => {
 				done();
 			})
 
-			client.emit('AccountQuery', { Query: 'EmailStatus' });
+			client.socket.emit('AccountQuery', { Query: 'EmailStatus' });
 		});
 	});
 });

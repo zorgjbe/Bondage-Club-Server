@@ -1,7 +1,5 @@
-import { Socket } from "socket.io-client";
-import { Club } from "./client";
+import { Client } from "./client";
 import { DbClient } from "./db";
-import { generateAccount } from "./fake";
 
 describe("server", () => {
 
@@ -15,78 +13,60 @@ describe("server", () => {
 		DB.disconnect();
 	});
 
-	/** API client */
-	let client: Socket;
+	let client: Client;
 	beforeEach(async () => {
-		client = await Club.createClient();
+		client = new Client(DB);
+		await client.connect();
 	});
 
-	afterEach(() => {
-		if (client.connected) {
+	afterEach(async () => {
+		if (client.isConnected()) {
 			client.disconnect();
 		}
-		client.close();
+		await client.cleanupAccount();
+		// @ts-ignore
+		client = null;
 	});
 
-	// Test user cleanup
-	let testAccount: ServerAccount;
-	beforeEach(() => {
-		const accounts = DB.database.collection('Accounts');
-		testAccount = generateAccount();
-		accounts.deleteMany({ AccountName: "TESTACCOUNT" });
-	});
-	afterEach(() => {
-		const accounts = DB.database.collection('Accounts');
-		accounts.deleteMany({ AccountName: "TESTACCOUNT" });
-	});
-
-	test("can create accounts", (done) => {
+	test("can create accounts", async () => {
 		expect.assertions(2);
 
-		expect(client.connected).toBe(true);
+		expect(client.isConnected()).toBe(true);
 
-		client.on("CreationResponse", (arg) => {
-			expect(arg).toMatchObject({
-				MemberNumber: expect.any(Number),
-				OnlineID: expect.any(String),
-				ServerAnswer: "AccountCreated",
-			});
-			done();
+		const reply = await client.createAccount();
+		expect(reply).toMatchObject({
+			MemberNumber: expect.any(Number),
+			OnlineID: expect.any(String),
+			ServerAnswer: "AccountCreated",
 		});
-
-		client.emit("AccountCreate", testAccount);
 	});
 
 	// FIXME: This one actually causes a null-response from server
-	xtest("can create accounts without an email", (done) => {
+	xtest("can create accounts without an email", async () => {
 		expect.assertions(2);
-		testAccount.Email = "";
+		client.account!.Email = "";
 
-		expect(client.connected).toBe(true);
+		expect(client.isConnected()).toBe(true);
 
-		client.on("CreationResponse", (arg) => {
-			expect(arg).toMatchObject({
-				MemberNumber: expect.any(Number),
-				OnlineID: expect.any(String),
-				ServerAnswer: "AccountCreated",
-			});
-			done();
+		const reply = await client.createAccount();
+		expect(reply).toMatchObject({
+			MemberNumber: expect.any(Number),
+			OnlineID: expect.any(String),
+			ServerAnswer: "AccountCreated",
 		});
-
-		client.emit("AccountCreate", testAccount);
 	});
 
 	test("fails to create account with no data", (done) => {
 		expect.assertions(2);
 
-		expect(client.connected).toBe(true);
+		expect(client.isConnected()).toBe(true);
 
-		client.on("CreationResponse", (arg) => {
+		client.socket.on("CreationResponse", (arg: any) => {
 			expect(arg).toBe('Invalid account information');
 			done();
 		});
 
-		client.emit("AccountCreate", null);
+		client.socket.emit("AccountCreate", null);
 	});
 
 });

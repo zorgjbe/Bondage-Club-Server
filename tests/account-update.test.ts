@@ -1,5 +1,4 @@
-import { io, Socket } from "socket.io-client";
-import { Club } from "./client";
+import { Client } from "./client";
 import { DbClient } from "./db";
 import { generateAccount } from "./fake";
 import { sleep } from "./helpers";
@@ -16,34 +15,25 @@ describe("client", () => {
 		await DB.disconnect();
 	});
 
-	let client: Socket;
+	/** @type {Client} */
+	let client: Client;
 	beforeEach(async () => {
-		client = await Club.createClient();
+		client = new Client(DB);
+		await client.connect();
 	});
 
 	afterEach(() => {
-		if (client.connected) {
+		if (client.isConnected()) {
 			client.disconnect();
 		}
-		client.close();
-	});
-
-	// Test user cleanup
-	let testAccount: ServerAccount;
-	beforeEach(async () => {
-		const accounts = DB.database.collection('Accounts');
-		testAccount = generateAccount();
-		await accounts.deleteMany({ AccountName: testAccount.AccountName });
-	});
-	afterEach(async () => {
-		const accounts = DB.database.collection('Accounts');
-		await accounts.deleteMany({ AccountName: testAccount.AccountName });
+		client.cleanupAccount();
+		// @ts-ignore
+		client = null;
 	});
 
 	describe('with a valid account', () => {
 		beforeEach(async () => {
-			await DB.createAccount(testAccount.AccountName, testAccount.Password, testAccount.Name, testAccount.Email);
-			await Club.loginAccount(client, testAccount.AccountName, testAccount.Password);
+			await client.createAccount();
 		});
 
 		test.each([
@@ -64,17 +54,17 @@ describe("client", () => {
 			["FriendList", undefined, [1]],
 			["Title", undefined, "New"],
 		])('can update %s', async (key, before, after) => {
-			expect(client.connected).toBe(true);
+			expect(client.isConnected()).toBe(true);
 
 			const data = {}
 			// @ts-ignore
 			data[key] = after;
-			await client.emit('AccountUpdate', data);
+			await client.socket.emit('AccountUpdate', data);
 
 			/* FIXME: server reply seems to happen before the update is made to the DB */
 			await sleep(15);
 
-			const account = await DB.database.collection('Accounts').findOne({ AccountName: testAccount.AccountName });
+			const account = await DB.database.collection('Accounts').findOne({ AccountName: client.account.AccountName });
 			expect(account[key]).not.toStrictEqual(before);
 			expect(account[key]).toStrictEqual(after);
 		});
@@ -84,10 +74,10 @@ describe("client", () => {
 
 		/* FIXME: Some of these would require a peek at the account after login */
 		test.each([
-			["Name", () => testAccount.Name, "Invalid"],
-			["AccountName", () => testAccount.AccountName, "Invalid"],
+			["Name", () => client.account.Name, "Invalid"],
+			["AccountName", () => client.account.AccountName, "Invalid"],
 			// ["Password", undefined, undefined],
-			["Email", () => testAccount.Email, "Invalid"],
+			["Email", () => client.account.Email, "Invalid"],
 			// ["Creation", undefined, undefined],
 			// ["LastLogin", undefined, undefined],
 			["Pose", undefined, "Invalid"],
@@ -100,33 +90,33 @@ describe("client", () => {
 			["Lovership", [], "Invalid"],
 			["Difficulty", undefined, 3],
 		])('can\'t update %s', async (key, before, after) => {
-			expect(client.connected).toBe(true);
+			expect(client.isConnected()).toBe(true);
 
 			const dynamicBefore = typeof before === "function" ? before() : before;
 			const data = {}
 			// @ts-ignore
 			data[key] = after;
 
-			await client.emit('AccountUpdate', data);
+			await client.socket.emit('AccountUpdate', data);
 
 			/* FIXME: server reply seems to happen before the update is made to the DB */
 			await sleep(15);
 
-			const account = await DB.database.collection('Accounts').findOne({ AccountName: testAccount.AccountName });
+			const account = await DB.database.collection('Accounts').findOne({ AccountName: client.account.AccountName });
 			expect(account[key]).not.toStrictEqual(after);
 			expect(account[key]).toStrictEqual(dynamicBefore);
 		});
 
 		describe('can update its email', () => {
 			test("if it matches the previous email", (done) => {
-				const data = { EmailOld: testAccount.Email, EmailNew: "new@example.com" };
+				const data = { EmailOld: client.account.Email, EmailNew: "new@example.com" };
 				let duplicateReply = 0;
 
 				expect.assertions(4);
 
-				expect(client.connected).toBe(true);
+				expect(client.isConnected()).toBe(true);
 
-				client.on('AccountQueryResult', async (result) => {
+				client.socket.on('AccountQueryResult', async (result) => {
 					duplicateReply++;
 					if (duplicateReply == 1) {
 						/*
@@ -146,14 +136,14 @@ describe("client", () => {
 					});
 					await sleep(15);
 
-					const account = await DB.database.collection('Accounts').findOne({ AccountName: testAccount.AccountName });
+					const account = await DB.database.collection('Accounts').findOne({ AccountName: client.account.AccountName });
 					expect(account.Email).toBe('new@example.com');
 
 					if (duplicateReply == 2)
 						done();
 				});
 
-				client.emit('AccountUpdateEmail', data);
+				client.socket.emit('AccountUpdateEmail', data);
 			});
 
 			test("unless it's not the previous email", (done) => {
@@ -161,21 +151,21 @@ describe("client", () => {
 
 				expect.assertions(3);
 
-				expect(client.connected).toBe(true);
+				expect(client.isConnected()).toBe(true);
 
-				client.on('AccountQueryResult', async (result) => {
+				client.socket.on('AccountQueryResult', async (result) => {
 					expect(result).toMatchObject({
 						Query: 'EmailUpdate',
 						Result: false,
 					});
 					await sleep(15);
 
-					const account = await DB.database.collection('Accounts').findOne({ AccountName: testAccount.AccountName });
-					expect(account.Email).toBe(testAccount.Email);
+					const account = await DB.database.collection('Accounts').findOne({ AccountName: client.account.AccountName });
+					expect(account.Email).toBe(client.account.Email);
 					done();
 				});
 
-				client.emit('AccountUpdateEmail', data);
+				client.socket.emit('AccountUpdateEmail', data);
 			});
 		});
 	});
