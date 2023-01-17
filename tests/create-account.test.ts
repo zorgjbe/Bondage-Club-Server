@@ -1,21 +1,17 @@
+import { MongoClient } from "mongodb";
 import { io, Socket } from "socket.io-client";
-import { Db, MongoClient } from "mongodb";
+import { DbClient } from "./db";
 
 describe("server", () => {
 
-	/** Database connection */
-	let mongodb: MongoClient;
-	let database: Db
+	// Database connection
+	let DB: DbClient;
 	beforeAll(async () => {
-		mongodb = await MongoClient.connect(process.env.TEST_DATABASE_URL as string, {
-			useUnifiedTopology: true,
-			useNewUrlParser: true,
-		});
-		database = await mongodb.db(process.env.DATABASE_NAME);
+		DB = await DbClient.connectDatabase();
 	});
 
 	afterAll(async () => {
-		await mongodb.close();
+		DB.disconnect();
 	});
 
 	/** API client */
@@ -37,11 +33,11 @@ describe("server", () => {
 
 	// Test user cleanup
 	beforeEach(() => {
-		const accounts = database.collection('Accounts');
+		const accounts = DB.database.collection('Accounts');
 		accounts.deleteMany({ AccountName: "TESTACCOUNT" });
 	});
 	afterEach(() => {
-		const accounts = database.collection('Accounts');
+		const accounts = DB.database.collection('Accounts');
 		accounts.deleteMany({ AccountName: "TESTACCOUNT" });
 	});
 
