@@ -120,5 +120,63 @@ describe("client", () => {
 			expect(account[key]).not.toStrictEqual(after);
 			expect(account[key]).toStrictEqual(before);
 		});
+
+		describe('can update its email', () => {
+			test("if it matches the previous email", (done) => {
+				const data = { EmailOld: testAccount.Email, EmailNew: "new@example.com" };
+				let duplicateReply = 0;
+
+				expect.assertions(4);
+
+				client.on('AccountQueryResult', async (result) => {
+					duplicateReply++;
+					if (duplicateReply == 1) {
+						/*
+						 * FIXME: server first sends a `Result: false` because of an invalid fallthrough,
+						 * swallow it.
+						 */
+						expect(result).toMatchObject({
+							Query: 'EmailUpdate',
+							Result: false,
+						});
+						return;
+					}
+
+					expect(result).toMatchObject({
+						Query: 'EmailUpdate',
+						Result: true,
+					});
+					await sleep(15);
+
+					const account = await DB.database.collection('Accounts').findOne({ AccountName: testAccount.AccountName });
+					expect(account.Email).toBe('new@example.com');
+
+					if (duplicateReply == 2)
+						done();
+				});
+
+				client.emit('AccountUpdateEmail', data);
+			});
+
+			test("unless it's not the previous email", (done) => {
+				const data = { EmailOld: 'random@example.com', EmailNew: "new@example.com" };
+
+				expect.assertions(3);
+
+				client.on('AccountQueryResult', async (result) => {
+					expect(result).toMatchObject({
+						Query: 'EmailUpdate',
+						Result: false,
+					});
+					await sleep(15);
+
+					const account = await DB.database.collection('Accounts').findOne({ AccountName: testAccount.AccountName });
+					expect(account.Email).toBe(testAccount.Email);
+					done();
+				});
+
+				client.emit('AccountUpdateEmail', data);
+			});
+		});
 	});
 });
