@@ -6,3 +6,4 @@ interface ServerInfoMessage {
     Time: number;
 }
 
+type ServerAccountUpdateMessage = Partial<Account>;
