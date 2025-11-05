@@ -2301,10 +2301,56 @@ function PasswordResetSetNumber(AccountName, ResetNumber) {
  * @param {ServerPasswordResetRequest} data
  * @param {ServerSocket} socket
  */
-function PasswordReset(data, socket) {
-	if (typeof data !== "string" || !CommonEmailIsValid(data)) {
-		// socket.emit("PasswordResetResponse", "InvalidEmail");
-		return;
+async function PasswordReset(data, socket) {
+	if ((data != null) && (typeof data === "string") && (data != "") && CommonEmailIsValid(data)) {
+
+		// One email reset password per 5 seconds to prevent flooding
+		if (NextPasswordReset > CommonTime()) return socket.emit("PasswordResetResponse", "RetryLater");
+		NextPasswordReset = CommonTime() + 5000;
+
+		function escapeRegex(string) {
+			return string.replace(/[/\-\\^$*+?.()|[\]{}]/g, '\\$&');
+		}
+
+		let count = 0;
+		let didError = false;
+		// Gets all accounts that matches the email
+		let emailRegex = new RegExp(`^${escapeRegex(data)}$`, "i");
+		const cursor = await Database.collection(AccountCollection).find({ Email: emailRegex }, { projection: { AccountName: 1, Email: 1 } });
+		for (const account of await cursor.toArray()) {
+			try {
+				count++;
+
+				// Generate a reset number for each account found and creates the email body
+				const resetNumber = (crypto.randomBytes(6).readUIntBE(0, 6) % 1000000000000).toString();
+
+				// Sends the email and logs the result
+				await MailTransporter.sendMail({
+					from: "donotreply@bondageprojects.com",
+					to: account.Email,
+					subject: "Bondage Club Password Reset",
+					html: `To reset your account password, enter your account name and the reset number included in this email. `
+					+ `You need to put these in the Bondage Club password reset screen, with your new password.<br /><br />`
+					+ `Account Name: ${account.AccountName}<br />`
+					+ `Reset Number: ${resetNumber}<br /><br />`,
+				});
+				console.log(`Password reset email send to: ${account.Email}`);
+				PasswordResetSetNumber(account.AccountName, resetNumber);
+			} catch (err) {
+				console.log("Error while sending password reset email: ", err);
+				didError = true;
+			}
+		}
+
+		if (count === 0) {
+			socket.emit("PasswordResetResponse", "NoAccountOnEmail");
+			return;
+		}
+		if (didError) {
+			socket.emit("PasswordResetResponse", "EmailSentError");
+			return;
+		}
+		socket.emit("PasswordResetResponse", "EmailSent");
 	}
 
 	// One email reset password per 5 seconds to prevent flooding
